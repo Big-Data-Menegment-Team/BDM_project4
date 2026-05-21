@@ -1,16 +1,5 @@
 # Task Split — RICO Production Pipeline (Project 4)
 
-This document divides the project (see `README.md`) into **3 independent parts** for a
-3-person team, and gives a detailed guideline for **Part A**.
-
-The split is driven by **dependencies**: there is a foundation everyone needs (DB schema,
-shared helpers, the DAG skeleton, infrastructure). Whoever builds that **must go first** —
-so that is Part A. Parts B and C depend only on *contracts Part A publishes* (the schema,
-helper function signatures, DAG task names), not on Part A's code being finished — so once
-Part A commits Phase 1, **B and C unblock and work in parallel**.
-
----
-
 ## The project in one line
 
 Turn the lab notebook (`notebook.ipynb`) into a scheduled, idempotent, observable,
@@ -196,33 +185,6 @@ creates a `pipeline_runs` row and populates `screens_metadata` with non-null `ru
 
 ---
 
-## Disk space estimate
-
-The lab alone needed ~3 GB. The production version is bigger — mostly because the ML stack
-(torch, CLIP, SBERT) now lives **inside** a custom Airflow image.
-
-| Item | Size |
-|---|---|
-| Custom Airflow image (base ~1.8 GB + CPU torch + ML stack) | ~5–6 GB |
-| Ollama image | ~1.5 GB |
-| `qwen2.5:3b` model weights | ~1.9 GB |
-| Postgres (pgvector) + MinIO + mc images | ~0.7 GB |
-| HuggingFace cache (CLIP ~0.6 GB, SBERT ~0.1 GB, dataset stream cache) | ~1.5–2 GB |
-| Docker volumes (Postgres data, MinIO blobs, Airflow logs) | ~0.5 GB |
-| Docker build cache / transient layers | ~3–5 GB |
-| **Steady-state footprint** | **~12–14 GB** |
-| **Recommended free space** | **~18–20 GB** |
-
-**macOS notes:**
-
-- Docker Desktop runs a Linux VM with its **own** disk allocation. Check
-  *Docker Desktop → Settings → Resources → Disk* has ≥ 25 GB allocated — this is separate
-  from host free space.
-- Use **CPU-only torch** in the Airflow image (`--index-url https://download.pytorch.org/whl/cpu`).
-  CUDA torch would nearly double the image size for no benefit on a Mac.
-
----
-
 ## Part A — built (status & resolved contracts)
 
 Part A is implemented. Resolved decisions:
@@ -272,12 +234,4 @@ Each stub file's docstring states its full contract.
 - `rico.storage` — `s3_client`, `put_bytes`, `get_bytes`, `object_exists`,
   and the key builders `png_key` / `hierarchy_key` / `text_key`.
 - `rico.fingerprint` — `sha256_bytes`, `sha256_text`.
-
-### Conventions
-
-- **Logging:** every log line starts with `run=<run_id> stage=<name>`
-  (README §3.2 — logs must be diagnosable from `run_id` alone).
-- **Schema changes:** `002` auto-runs only on a *fresh* Postgres volume. After
-  editing it, run `make clean && make build && make up`, or `make migrate` on a
-  live DB.
 

@@ -15,3 +15,9 @@ RUN pip install --no-cache-dir \
 COPY --chown=airflow:root pyproject.toml /opt/rico-src/pyproject.toml
 COPY --chown=airflow:root rico/ /opt/rico-src/rico/
 RUN pip install --no-cache-dir /opt/rico-src
+
+# Pre-create the HuggingFace cache directory, owned by the airflow user. When
+# the `hf-cache` named volume is first mounted here, Docker initialises the
+# volume from this directory — so it inherits airflow ownership instead of
+# root, and model/dataset downloads can write to it.
+RUN mkdir -p /opt/airflow/.cache/huggingface

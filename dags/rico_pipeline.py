@@ -9,6 +9,10 @@ auditable DAG:
 This file is orchestration only — every task delegates to a function in the
 ``rico`` package. Heavy imports are deferred into the task bodies so DAG parsing
 stays fast. See ``TASK_SPLIT.md`` and ``README.md`` for the full design.
+
+Note: the task parameter is ``pipeline_run_id`` (our pipeline_runs UUID), NOT
+``run_id`` — ``run_id`` is a reserved Airflow task-context key and cannot be a
+TaskFlow parameter name.
 """
 
 from __future__ import annotations
@@ -74,82 +78,82 @@ def rico_pipeline():
         context = get_current_context()
         dag_run = context["dag_run"]
         limit = int(context["params"]["limit"])
-        run_id = db.create_pipeline_run(
+        pipeline_run_id = db.create_pipeline_run(
             dag_run_id=dag_run.run_id,
             triggered_by=str(dag_run.run_type),
             limit_param=limit,
         )
         log.info(
             "run=%s stage=init_run dag_run=%s limit=%d trigger=%s",
-            run_id, dag_run.run_id, limit, dag_run.run_type,
+            pipeline_run_id, dag_run.run_id, limit, dag_run.run_type,
         )
-        return run_id
+        return pipeline_run_id
 
     @task
-    def ingest(run_id: str) -> list[int]:
+    def ingest(pipeline_run_id: str) -> list[int]:
         """Stream the first LIMIT screens into MinIO + screens_metadata."""
         from airflow.operators.python import get_current_context
 
         from rico.tasks.ingest import run_ingest
 
         limit = int(get_current_context()["params"]["limit"])
-        return run_ingest(run_id, limit)
+        return run_ingest(pipeline_run_id, limit)
 
     @task
-    def parse(run_id: str) -> dict:
+    def parse(pipeline_run_id: str) -> dict:
         """Parse view hierarchies into text representations in MinIO."""
         from rico.tasks.parse import run_parse
 
-        return run_parse(run_id)
+        return run_parse(pipeline_run_id)
 
     @task
-    def embed_image(run_id: str):
+    def embed_image(pipeline_run_id: str):
         from rico.tasks.embed_image import run_embed_image
 
-        return run_embed_image(run_id)
+        return run_embed_image(pipeline_run_id)
 
     @task
-    def embed_text(run_id: str):
+    def embed_text(pipeline_run_id: str):
         from rico.tasks.embed_text import run_embed_text
 
-        return run_embed_text(run_id)
+        return run_embed_text(pipeline_run_id)
 
     @task
-    def extract(run_id: str):
+    def extract(pipeline_run_id: str):
         from rico.tasks.extract import run_extract
 
-        return run_extract(run_id)
+        return run_extract(pipeline_run_id)
 
     @task
-    def load(run_id: str):
+    def load(pipeline_run_id: str):
         from rico.tasks.load import run_load
 
-        return run_load(run_id)
+        return run_load(pipeline_run_id)
 
     @task
-    def audit(run_id: str):
+    def audit(pipeline_run_id: str):
         from rico.tasks.audit import run_audit
 
-        return run_audit(run_id)
+        return run_audit(pipeline_run_id)
 
     @task(task_id="eval")
-    def evaluate(run_id: str):
+    def evaluate(pipeline_run_id: str):
         from rico.tasks.eval import run_eval
 
-        return run_eval(run_id)
+        return run_eval(pipeline_run_id)
 
     # --- wiring -------------------------------------------------------------
-    # Every task takes run_id, so all are data-dependent on init_run. The `>>`
-    # chain adds the stage ordering, including the parallel embed/extract fan-out.
-    run_id = init_run()
-    ingested = ingest(run_id)
-    parsed = parse(run_id)
-    image_vectors = embed_image(run_id)
-    text_vectors = embed_text(run_id)
-    extracted = extract(run_id)
-    loaded = load(run_id)
-    audited = audit(run_id)
-    evaluated = evaluate(run_id)
+    # Every task takes pipeline_run_id, so all are data-dependent on init_run.
+    # The `>>` chain adds stage ordering, including the embed/extract fan-out.
+    pipeline_run_id = init_run()
+    ingested = ingest(pipeline_run_id)
+    parsed = parse(pipeline_run_id)
+    image_vectors = embed_image(pipeline_run_id)
+    text_vectors = embed_text(pipeline_run_id)
+    extracted = extract(pipeline_run_id)
+    loaded = load(pipeline_run_id)
+    audited = audit(pipeline_run_id)
+    evaluated = evaluate(pipeline_run_id)
 
     (
         ingested
