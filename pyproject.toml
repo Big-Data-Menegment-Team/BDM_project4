@@ -1,0 +1,42 @@
+[project]
+name = "rico-pipeline"
+version = "0.1.0"
+description = "RICO multimodal pipeline re-implemented as an Airflow DAG (BDM Project 4)"
+requires-python = ">=3.11"
+
+# Runtime dependencies of the `rico` package. Airflow itself is NOT listed here:
+# it is provided by the apache/airflow base image (see Dockerfile). torch is
+# installed CPU-only by the Dockerfile before this package, to avoid the large
+# default CUDA build.
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
+    "boto3>=1.35",
+    "requests>=2.32",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "pillow>=10.0",
+    # ML stack — versions matched to the lab for reproducibility.
+    # datasets pinned <3 so the script-based RICO-Screen2Words dataset still loads.
+    "datasets<3",
+    "huggingface_hub<0.24",
+    "fsspec<2024.4",
+    "torch>=2.4",
+    "open-clip-torch>=2.30",
+    "sentence-transformers>=3.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["rico", "rico.tasks"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Put the repo root on sys.path so `import rico` works without an editable install.
+pythonpath = ["."]
