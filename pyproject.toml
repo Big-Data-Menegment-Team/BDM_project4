@@ -36,6 +36,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 packages = ["rico", "rico.tasks"]
 
+[tool.setuptools.package-data]
+# Ship the versioned prompt files alongside the rico package so the extract
+# task can read them whether rico is bind-mounted or pip-installed.
+rico = ["prompts/*.txt"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Put the repo root on sys.path so `import rico` works without an editable install.

@@ -46,6 +46,30 @@ def text_key(screen_id) -> str:
     return f"screens/{screen_id}.txt"
 
 
+def clip_vector_key(screen_id) -> str:
+    """MinIO key for a CLIP image vector staged by ``embed_image`` for ``load``.
+
+    The staged object is a numpy ``.npz`` archive packing the vector and the
+    PNG ``source_fingerprint`` together so ``load`` cannot read one without
+    the other.
+    """
+    return f"screens/{screen_id}.clip.npz"
+
+
+def sbert_vector_key(screen_id) -> str:
+    """MinIO key for an SBERT text vector staged by ``embed_text`` for ``load``.
+
+    Same ``.npz`` layout as :func:`clip_vector_key`; the packed fingerprint is
+    the SHA-256 of the text representation the embedder consumed.
+    """
+    return f"screens/{screen_id}.sbert.npz"
+
+
+def extraction_key(screen_id) -> str:
+    """MinIO key for an LLM extraction staged by ``extract`` for ``load``."""
+    return f"screens/{screen_id}.extract.json"
+
+
 # --- Object I/O -------------------------------------------------------------
 def put_bytes(key: str, data: bytes) -> None:
     """Write ``data`` to ``key`` in the configured bucket."""
