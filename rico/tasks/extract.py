@@ -53,13 +53,13 @@ def run_extract(run_id: str) -> dict:
     Stages one ``screens/{id}.extract.json`` artifact per screen in MinIO.
     Returns a small summary dict for logging, ``load`` is the consumer.
     """
-    from rico import db, storage
+    from rico import config, db, storage
     from rico.fingerprint import sha256_text
 
     template = load_prompt_template()
     log.info(
-        "run=%s stage=extract starting prompt_version=ok bytes=%d",
-        run_id, len(template),
+        "run=%s stage=extract starting prompt_version=%s bytes=%d model=%s",
+        run_id, config.PROMPT_VERSION, len(template), config.OLLAMA_MODEL,
     )
 
     with db.connection() as conn, conn.cursor() as cur:
