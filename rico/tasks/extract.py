@@ -71,9 +71,30 @@ def run_extract(run_id: str) -> dict:
         return {"run_id": run_id, "extracted": 0, "ok": 0, "failed": 0}
 
     ok_count = 0
-    failed_count = 0
+    text_missing_count = 0
+    llm_failed_count = 0
     for (screen_id,) in rows:
-        text = storage.get_bytes(storage.text_key(int(screen_id))).decode("utf-8")
+        text_key = storage.text_key(int(screen_id))
+        try:
+            text = storage.get_bytes(text_key).decode("utf-8")
+        except Exception as exc:  # parse never wrote the .txt, or MinIO lost it
+            artifact = {
+                "ok": False,
+                "raw": None,
+                "error": f"text_missing: {type(exc).__name__}: {exc}",
+                "fingerprint": sha256_text(f"text_missing:{screen_id}"),
+            }
+            text_missing_count += 1
+            log.warning(
+                "run=%s stage=extract screen=%s reason=text_missing key=%s error=%s",
+                run_id, screen_id, text_key, f"{type(exc).__name__}: {exc}",
+            )
+            storage.put_bytes(
+                storage.extraction_key(int(screen_id)),
+                json.dumps(artifact).encode("utf-8"),
+            )
+            continue
+
         fingerprint = sha256_text(text)
         prompt = template.replace("{hierarchy_text}", text)
 
@@ -93,16 +114,17 @@ def run_extract(run_id: str) -> dict:
             )
         except Exception as exc:  # bad JSON, HTTP errors, timeouts all route to review
             raw_text = locals().get("raw")
+            reason = "llm_bad_json" if isinstance(exc, json.JSONDecodeError) else "llm_failed"
             artifact = {
                 "ok": False,
                 "raw": raw_text if isinstance(raw_text, str) else None,
                 "error": f"{type(exc).__name__}: {exc}",
                 "fingerprint": fingerprint,
             }
-            failed_count += 1
+            llm_failed_count += 1
             log.warning(
-                "run=%s stage=extract screen=%s ok=false error=%s",
-                run_id, screen_id, artifact["error"],
+                "run=%s stage=extract screen=%s reason=%s error=%s",
+                run_id, screen_id, reason, artifact["error"],
             )
 
         storage.put_bytes(
@@ -110,13 +132,18 @@ def run_extract(run_id: str) -> dict:
             json.dumps(artifact).encode("utf-8"),
         )
 
+    failed_count = text_missing_count + llm_failed_count
     log.info(
-        "run=%s stage=extract complete screens=%d ok=%d failed=%d",
+        "run=%s stage=extract complete screens=%d ok=%d failed=%d "
+        "text_missing=%d llm_failed=%d",
         run_id, len(rows), ok_count, failed_count,
+        text_missing_count, llm_failed_count,
     )
     return {
         "run_id": run_id,
         "extracted": len(rows),
         "ok": ok_count,
         "failed": failed_count,
+        "text_missing": text_missing_count,
+        "llm_failed": llm_failed_count,
     }
