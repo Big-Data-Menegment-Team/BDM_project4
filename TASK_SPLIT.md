@@ -235,3 +235,43 @@ Each stub file's docstring states its full contract.
   and the key builders `png_key` / `hierarchy_key` / `text_key`.
 - `rico.fingerprint` — `sha256_bytes`, `sha256_text`.
 
+---
+
+## Part B - built (status & resolved contracts)
+
+Part B is implemented. Resolved decisions:
+
+| Decision | Choice |
+|---|---|
+| compute → load handoff | each compute task writes a per-screen artifact to MinIO. `load` is the one place that hits the DB |
+| vector staging format | `np.savez` (`.npz`) carrying both the vector and its `source_fingerprint` - atomic write, no drift |
+| prompt versioning | `rico/prompts/extract_v{PROMPT_VERSION}.txt`, bind-mounted and bundled as setuptools package-data |
+| idempotency scope | scoped delete-then-insert by **screen_id**, NOT by `run_id` - each manual trigger gets a fresh `dag_run_id`, so a run_id-scoped delete would leave prior runs' rows behind and grow the table on every re-trigger |
+| bad LLM JSON | `extract` catches per screen and stages `{"ok": false, ...}`. `load` routes the screen to `screens_review_queue` instead of crashing |
+
+### Contracts Part C must know
+
+- **Row shape per run.** `rico/tasks/load.py` writes exactly **2 rows per screen** to `screens_embeddings`: one `('open-clip', CLIP_MODEL_VERSION, 'image')` and one `('sentence-transformers', SBERT_MODEL_VERSION, 'text')`. For LIMIT=N that's `2*N` rows, no more. The 4-tuple `(screen_id, model_name, model_version, embedding_kind)` is unique **by construction** on a single run, the audit fires only on manually-injected duplicates.
+- **Extraction shape.** `rico/prompts/extract_v1.txt` is the LLM contract - tells the model to return `{"title": str, "elements": [{"type", "text"}], "confidence": float}`. `rico/tasks/extract.py` parses it. `rico/tasks/load.py` writes it into `screens_metadata.extraction_payload` (JSONB) together with `confidence` (float) and `prompt_version='v1'`.
+- **Review-queue trigger.** `rico/tasks/load.py` inserts into `screens_review_queue` when an extract artifact is missing (`reason='extract_missing'`) or has `ok: false` (reason = the LLM/HTTP error string). Empty on a clean run.
+- **Idempotency invariant.** `load.py`'s DELETEs are scoped by `screen_id`, not `run_id` (see `DELETE_EMBEDDINGS_FOR_SCREENS` / `DELETE_REVIEW_QUEUE_FOR_SCREENS`). So re-triggering LIMIT=5 produces **zero** new rows in any destination table - `tests/test_load_sql.py` asserts this in CI. Verify locally with `make trigger LIMIT=5` twice + `SELECT count(*) FROM screens_embeddings` (count stays flat).
+
+### Updated task status
+
+| Function | Status |
+|---|---|
+| `rico.tasks.embed_image.run_embed_image(run_id) -> dict` | built (Part B) |
+| `rico.tasks.embed_text.run_embed_text(run_id) -> dict` | built (Part B) |
+| `rico.tasks.extract.run_extract(run_id) -> dict` | built (Part B) |
+| `rico.tasks.load.run_load(run_id) -> dict` | built (Part B) |
+| `rico.tasks.audit.run_audit(run_id)` | stub - Part C |
+| `rico.tasks.eval.run_eval(run_id)` | stub - Part C |
+
+### New helpers Part B published
+
+- `rico.storage.clip_vector_key`, `sbert_vector_key`, `extraction_key` - MinIO keys for the staged artifacts.
+- `rico/prompts/extract_v1.txt` - versioned LLM prompt. `rico.config.PROMPT_VERSION` is the contract.
+
+### Infrastructure adjustments
+
+- **Dockerfile**: pin `torchvision>=0.19` from the CPU wheel index alongside `torch>=2.4`. Without this, `open_clip` / `sentence-transformers` triggers `RuntimeError: operator torchvision::nms does not exist` at import time.
