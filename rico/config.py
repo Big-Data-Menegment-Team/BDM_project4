@@ -29,6 +29,9 @@ MINIO_BUCKET = os.getenv("MINIO_BUCKET", "rico-raw")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 
+# --- Observability -----------------------------------------------------------
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
+
 # --- Dataset ----------------------------------------------------------------
 HF_DATASET = os.getenv("HF_DATASET", "rootsautomation/RICO-Screen2Words")
 

@@ -8,6 +8,7 @@ import logging
 import os
 import subprocess
 import uuid
+from typing import Any
 
 import psycopg
 
@@ -119,3 +120,81 @@ def finalize_pipeline_run(dag_run_id: str, success: bool) -> None:
             (success, dag_run_id),
         )
         conn.commit()
+
+
+def set_pipeline_run_status(run_id: str, status: str) -> None:
+    """Set ``pipeline_runs.status`` for a run_id."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE pipeline_runs SET status = %s WHERE run_id = %s",
+            (status, run_id),
+        )
+        conn.commit()
+
+
+def get_pipeline_run_by_dag_run_id(dag_run_id: str) -> dict[str, Any] | None:
+    """Return one ``pipeline_runs`` row as a dict (looked up by dag_run_id)."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT run_id, dag_run_id, triggered_by, started_at, ended_at, status,
+                   limit_param, git_sha, clip_version, sbert_version, llm_model, prompt_version
+            FROM pipeline_runs
+            WHERE dag_run_id = %s
+            """,
+            (dag_run_id,),
+        )
+        row = cur.fetchone()
+
+    if row is None:
+        return None
+
+    keys = (
+        "run_id",
+        "dag_run_id",
+        "triggered_by",
+        "started_at",
+        "ended_at",
+        "status",
+        "limit_param",
+        "git_sha",
+        "clip_version",
+        "sbert_version",
+        "llm_model",
+        "prompt_version",
+    )
+    return {k: v for k, v in zip(keys, row)}
+
+
+def get_pipeline_run(run_id: str) -> dict[str, Any] | None:
+    """Return one ``pipeline_runs`` row as a dict (looked up by run_id)."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT run_id, dag_run_id, triggered_by, started_at, ended_at, status,
+                   limit_param, git_sha, clip_version, sbert_version, llm_model, prompt_version
+            FROM pipeline_runs
+            WHERE run_id = %s
+            """,
+            (run_id,),
+        )
+        row = cur.fetchone()
+
+    if row is None:
+        return None
+
+    keys = (
+        "run_id",
+        "dag_run_id",
+        "triggered_by",
+        "started_at",
+        "ended_at",
+        "status",
+        "limit_param",
+        "git_sha",
+        "clip_version",
+        "sbert_version",
+        "llm_model",
+        "prompt_version",
+    )
+    return {k: v for k, v in zip(keys, row)}

@@ -22,7 +22,7 @@ x-airflow-common: &airflow-common
     MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
     MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     MINIO_BUCKET: ${MINIO_BUCKET:-rico-raw}
-    OLLAMA_URL: http://ollama:11434
+    OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
     OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
     SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     HF_HOME: /opt/airflow/.cache/huggingface
@@ -39,7 +39,7 @@ services:
 
   postgres:
     # PostgreSQL 16 LTS + pgvector 0.8 (HNSW + halfvec available).
-    image: pgvector/pgvector:0.8.0-pg16
+    image: ghcr.io/immich-app/postgres:16-vectorchord0.5.3-pgvector0.8.1
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-rico}
       POSTGRES_USER: ${POSTGRES_USER:-rico}
@@ -59,7 +59,7 @@ services:
 
   minio:
     # Pinned RELEASE: MinIO ships breaking server/CLI changes on :latest.
-    image: minio/minio:RELEASE.2024-12-13T22-19-12Z
+    image: quay.io/minio/minio:RELEASE.2024-12-13T22-19-12Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
@@ -77,7 +77,7 @@ services:
 
   minio-init:
     # Aligns mc client release with the server release above.
-    image: minio/mc:RELEASE.2024-11-21T17-21-54Z
+    image: quay.io/minio/mc:RELEASE.2024-11-21T17-21-54Z
     depends_on:
       minio:
         condition: service_healthy
@@ -164,3 +164,6 @@ volumes:
   ollama-data:
   airflow-logs:
   hf-cache:
+
+
+
